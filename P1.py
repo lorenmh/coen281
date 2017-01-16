@@ -177,17 +177,14 @@ def generate_user_ratings_matrix(movie_ratings_for_user, size):
     return user_ratings_matrix
 
 
-# Filter out all empty lines from stdin and put them into input_lines
-input_lines = filter(len, sys.stdin)
-
 # catch all input errors, print to stderr and exit
 try:
     # for every input line, parse the line and put the values into ratings
     # because python3 is < python2 I have to turn this into a list apparently
-    ratings = list(map(parse_input_line, input_lines))
+    ratings = list(map(parse_input_line, sys.stdin))
 except InputError as e:
     # there was an InputError so record the error and exit
-    print('Error with input line:', e.message, file=sys.stderr)
+    print('Error with input:', e.message, file=sys.stderr)
     sys.exit(1)
 
 # gets the max movie_id. This is needed to compute the sparse matrix size
