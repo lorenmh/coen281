@@ -47,7 +47,7 @@ def parse_input_line(input_line):
     # if the input_list does not have length of 3 then there was an incorrectly
     # formatted input
     if len(input_list) != 3:
-        raise InputError('Invalid input line "%s"' % input_line)
+        raise InputError('Invalid input line `%s`' % input_line)
 
     # unpack the input_list
     user_id_str, movie_id_str, rating_str = input_list
@@ -57,7 +57,7 @@ def parse_input_line(input_line):
         user_id = int(user_id_str)
     except ValueError:
         raise InputError(
-            'Invalid user id "%s" in line "%s"' % (user_id_str, input_line)
+            'Invalid user id `%s` in line `%s`' % (user_id_str, input_line)
         )
 
     # attempt to convert movie_id_str to an integer
@@ -65,7 +65,7 @@ def parse_input_line(input_line):
         movie_id = int(movie_id_str)
     except ValueError:
         raise InputError(
-            'Invalid movie id "%s" in line "%s"' % (movie_id_str, input_line)
+            'Invalid movie id `%s` in line `%s`' % (movie_id_str, input_line)
         )
 
     # attempt to convert user_id_str to a float
@@ -73,7 +73,7 @@ def parse_input_line(input_line):
         rating = float(rating_str)
     except ValueError:
         raise InputError(
-            'Invalid rating "%s" in line "%s"' % (rating_str, input_line)
+            'Invalid rating `%s` in line `%s`' % (rating_str, input_line)
         )
 
     # we now have the three values which have the correct types so we return a
@@ -183,10 +183,11 @@ input_lines = filter(len, sys.stdin)
 # catch all input errors, print to stderr and exit
 try:
     # for every input line, parse the line and put the values into ratings
-    ratings = map(parse_input_line, input_lines)
+    # because python3 is < python2 I have to turn this into a list apparently
+    ratings = list(map(parse_input_line, input_lines))
 except InputError as e:
     # there was an InputError so record the error and exit
-    print >> sys.stderr, 'Error with input line: ', e.message
+    print('Error with input line:', e.message, file=sys.stderr)
     sys.exit(1)
 
 # gets the max movie_id. This is needed to compute the sparse matrix size
@@ -226,7 +227,8 @@ ratings_grouped_by_user = reduce(
     co-occurance matrix. When we have performed this operation for all users we
     have the total co-occurance matrix which is used in the next step.
 '''
-for user_id, user_ratings in ratings_grouped_by_user.iteritems():
+
+for user_id, user_ratings in ratings_grouped_by_user.items():
     ''' From the above defined ratings_grouped_by_user, user_ratings will have
         a structure which looks like:
         [(101, 3.0), (102, 4.0)]
@@ -260,7 +262,7 @@ for user_id, user_ratings in ratings_grouped_by_user.iteritems():
 ''' Now that we have the co-occurance matrix we are ready to output
     recommendations for each user.
 '''
-for user_id, user_ratings in ratings_grouped_by_user.iteritems():
+for user_id, user_ratings in ratings_grouped_by_user.items():
     ''' user_ratings_matrix is a sparse Nx1 matrix, where N is the maximum
         movie id plus 1. So if the maximum movie id is 107, then this will be a
         108x1 sparse matrix. The value is the rating.
@@ -345,10 +347,13 @@ for user_id, user_ratings in ratings_grouped_by_user.iteritems():
     ''' Now we filter out all recommendations if they are in the
         movies_already_seen set.
     '''
-    unseen_movie_recommendations = filter(
+    unseen_movie_recommendations_iterator = filter(
         lambda mr: mr[0] not in movies_already_seen,
         movie_recommendations
     )
+
+    # python3 returns an iterator so I must convert this to a list
+    unseen_movie_recommendations = list(unseen_movie_recommendations_iterator)
 
     ''' We sort the unseen_movie_recommendations in descending order, making
         sure to sort by the recommendation value (lambda r: r[1]).
