@@ -1,4 +1,44 @@
 #!/opt/python-3.4/linux/bin/python3
+
+'''****************************************************************************
+Lauren Howard - 1/16/2017
+COEN 281 - Assignment P1
+
+This program outputs recommendations using the co-occurance technique specified
+in the P1 assignment guidelines document.
+
+For all matrices, a scipy sparse matrix is used to minimize memory overhead.
+
+First, all input is parsed from stdin. The program expects values to be comma
+delimited. If there are any errors with the input then the error is printed to
+stderr and the program exits with code 1.
+
+Then all of the ratings are grouped by user.
+
+Using these ratings a co-occurance matrix is created for each user.
+
+The user co-occurance matrices are accumulated into a single matrix which is
+the co-occurance matrix used to output recommendation values.
+
+Then a single column matrix is created for each user. The values in this matrix
+are the movie ratings for the user.
+
+To get the recommendations for a user, we multiply the total co-occurance
+matrix with that user's ratings matrix.
+
+Then, we filter out the recommendations for movies the user has already seen
+and sort the recommendations in descending order.
+
+The highest valued recommendation is the recommendation for this user.
+
+Given the example input from the assignment, the output should look like:
+user 1: [(104, 33.5), (106, 18.0), (105, 15.5), (107, 5.0)] => recommend 104
+user 2: [(106, 20.5), (105, 15.5), (107, 4.0)] => recommend 106
+user 3: [(103, 26.5), (102, 20.0), (106, 17.5)] => recommend 103
+user 4: [(102, 37.0), (105, 26.0), (107, 9.5)] => recommend 102
+user 5: [(107, 11.5)] => recommend 107
+****************************************************************************'''
+
 import re
 import sys
 import warnings
@@ -12,10 +52,40 @@ from itertools import permutations as permute
 from scipy.sparse import csc_matrix as sparse_matrix
 
 
-# used to parse the input text of CSV values (which might have spaces with
-# commas)
-SPLIT_RE_STR = r',\s?'
-SPLIT_RE = re.compile(SPLIT_RE_STR)
+''' Input regular expression.
+    I've annotated it and have split it into multiple lines to try to make it
+    more readable. See this link if you would like to see the regular
+    expression in action: https://regex101.com/r/n2sEnm/1
+'''
+INPUT_RE_STR = (
+    # match start of string
+    r'^' +
+    # match a comment which might be preceded by spaces, OR
+    r'(?:\s*#.*)|' +
+    # match a non-capturing group
+    r'(?:'
+    # there can be 0 or more spaces followed by a capturing group named user_id
+    # which matches 1 or more digits, which is followed by 0 or more spaces and
+    # a comma
+    r'\s*(?P<user_id>\d+)\s*,' +
+    # there can be 0 or more spaces followed by a capturing group named
+    # movie_id which matches 1 or more digits, which is followed by 0 or more
+    # spaces and a comma
+    r'\s*(?P<movie_id>\d+)\s*,' +
+    # there can be 0 or more spaces followed by a capturing group named rating
+    # which matches 1 or more digits which might be followed by a decimal point
+    # and 1 or more digits (if its a float), which is followed by 0 or more
+    # spaces
+    r'\s*(?P<rating>\d+(?:\.\d+)?)\s*' +
+    # which might be followed by a comment
+    r'(?:#.*)?' +
+    # close out the non-capturing group
+    r')' +
+    # match end of string
+    r'$'
+)
+INPUT_RE = re.compile(INPUT_RE_STR)
+
 
 # any float type is acceptable here, I am using 64 bit because I am running
 # this on a 64 bit machine.
@@ -31,54 +101,36 @@ class InputError(Exception):
         self.message = message
 
 
-def parse_input_line(input_line):
+def parsed_input_generator(input_lines):
     ''' parse_input_line will attempt to parse the user_id, movie_id, and
         rating from an input line. If there is an error with the input an
         InputError will be raised
     '''
 
-    # remove the trailing newline character
-    input_line = input_line.rstrip('\n')
+    for input_line in input_lines:
+        match = INPUT_RE.match(input_line)
 
-    # use the regular expression ',\s?' to split the string by the comma
-    # delimiter; "A,B,C" => ['A','B','C']
-    input_list = SPLIT_RE.split(input_line)
+        # there was no match at all, this line is not valid!
+        if match is None:
+            raise InputError('Invalid input `%s`' % input_line.rstrip('\n'))
 
-    # if the input_list does not have length of 3 then there was an incorrectly
-    # formatted input
-    if len(input_list) != 3:
-        raise InputError('Invalid input line `%s`' % input_line)
+        groups = match.groups()
 
-    # unpack the input_list
-    user_id_str, movie_id_str, rating_str = input_list
+        # this line starts with a comment so we will skip it
+        if None in groups:
+            continue
 
-    # attempt to convert user_id_str to an integer
-    try:
+        # unpack the groups, which is a 3-tuple of matched strings
+        user_id_str, movie_id_str, rating_str = groups
+
+        # because the regular expression matched I do not need to check for a
+        # ValueError here
         user_id = int(user_id_str)
-    except ValueError:
-        raise InputError(
-            'Invalid user id `%s` in line `%s`' % (user_id_str, input_line)
-        )
-
-    # attempt to convert movie_id_str to an integer
-    try:
         movie_id = int(movie_id_str)
-    except ValueError:
-        raise InputError(
-            'Invalid movie id `%s` in line `%s`' % (movie_id_str, input_line)
-        )
-
-    # attempt to convert user_id_str to a float
-    try:
         rating = float(rating_str)
-    except ValueError:
-        raise InputError(
-            'Invalid rating `%s` in line `%s`' % (rating_str, input_line)
-        )
 
-    # we now have the three values which have the correct types so we return a
-    # 3-tuple corresponding to these values.
-    return (user_id, movie_id, rating)
+        # have the generator yield a 3-tuple of the parsed values
+        yield user_id, movie_id, rating
 
 
 def group_by_user_reducer(accumulator, user_movie_rating):
@@ -114,7 +166,7 @@ def group_by_user_reducer(accumulator, user_movie_rating):
     accumulator[user_id] = movie_ratings_for_user
 
     # return the accumulator (because this is a function which will be used in
-    # a reducer
+    # a reducer)
     return accumulator
 
 
@@ -122,8 +174,8 @@ def generate_user_occurance_matrix(movies_seen_by_user, size):
     ''' movies_seen_by_user is a list of movie ids which this user has rated.
         size is the size of the occurance matrix.
 
-        user_occurance_matrix returns a sparse matrix which corresponds with
-        the films that have co-occured for this user.
+        generate_user_occurance_matrix returns a sparse matrix which
+        corresponds with the films that have co-occured for this user.
 
         The user_occurance_matrix has a value of 1 for movies that appear
         together. For instance, if the user has rated a movie with id A, and a
@@ -176,18 +228,19 @@ def generate_user_ratings_matrix(movie_ratings_for_user, size):
     # return the matrix
     return user_ratings_matrix
 
+# This is where the magic begins
 
-# catch all input errors, print to stderr and exit
+# catch all input errors, print to stderr and exit if an InputError is caught
 try:
     # for every input line, parse the line and put the values into ratings
-    # because python3 is < python2 I have to turn this into a list apparently
-    ratings = list(map(parse_input_line, sys.stdin))
+    ratings = list(parsed_input_generator(sys.stdin))
 except InputError as e:
     # there was an InputError so record the error and exit
     print('Error with input:', e.message, file=sys.stderr)
     sys.exit(1)
 
 # gets the max movie_id. This is needed to compute the sparse matrix size
+# movie_id is in the second column which is why you see the two `[1]` accesses
 max_movie_id = max(ratings, key=lambda r: r[1])[1]
 mat_size = max_movie_id + 1
 
@@ -204,8 +257,8 @@ co_occurance_matrix = sparse_matrix((mat_size, mat_size), dtype=MAT_DTYPE)
             2: [(101, 4.0), (103, 2.0)],
             3: ...
         }
-    In this example, user with id 1 has movie with id 101 a 3.0 rating, and has
-    rated movie 102 a 4.0 rating.
+    In this example, user with id 1 has rated movie with id 101 a 3.0 rating,
+    and has rated movie 102 a 4.0 rating.
 
     We need this data structure to know which movies have co-occured. In this
     example, movies with ids 101 and 102 have co-occured for user 1.
@@ -231,11 +284,11 @@ for user_id, user_ratings in ratings_grouped_by_user.items():
         [(101, 3.0), (102, 4.0)]
 
         To generate the co-occurance matrix, we only want to have the list of
-        movie ids, we do not need the rating, so this map is performed, which
+        movie ids, we do not need the rating, so this map is performed which
         will output a value which looks like this if we use the above example:
         [101, 102]
     '''
-    user_movies = map(lambda ur: ur[0], user_ratings)
+    movies_rated_by_user = map(lambda ur: ur[0], user_ratings)
 
     ''' Now we generate the co-occurance matrix for this individual user.
         If we continue using the example above and create a co-occurance matrix
@@ -248,7 +301,7 @@ for user_id, user_ratings in ratings_grouped_by_user.items():
         matrix[102, 102] == 1
     '''
     user_occurance_matrix = generate_user_occurance_matrix(
-        user_movies, mat_size
+        movies_rated_by_user, mat_size
     )
 
     ''' Then we add this to the co_occurance_matrix to accumulate the results
@@ -264,8 +317,8 @@ for user_id, user_ratings in ratings_grouped_by_user.items():
         movie id plus 1. So if the maximum movie id is 107, then this will be a
         108x1 sparse matrix. The value is the rating.
 
-        If this user user_ratings are [(101, 5.0), (102, 3.0), ...], then this
-        matrix will look like:
+        If this user's user_ratings are [(101, 5.0), (102, 3.0), ...], then
+        this matrix will look like:
 
         [
             [0.0], # row with index 0
@@ -299,6 +352,9 @@ for user_id, user_ratings in ratings_grouped_by_user.items():
             ((101, 0), 44.0),
             ((106, 0), 18.0)
         ]
+
+        matrix.todok() converts a sparse matrix to a dictionary
+        dictionary.items() converts a dictionary to a list of key, value pairs
     '''
     recommendation_items = recommendations_matrix.todok().items()
 
@@ -353,16 +409,21 @@ for user_id, user_ratings in ratings_grouped_by_user.items():
     unseen_movie_recommendations = list(unseen_movie_recommendations_iterator)
 
     ''' We sort the unseen_movie_recommendations in descending order, making
-        sure to sort by the recommendation value (lambda r: r[1]).
+        sure to sort by the recommendation value (lambda mr: mr[1]).
     '''
-    unseen_movie_recommendations.sort(key=lambda r: r[1], reverse=True)
+    unseen_movie_recommendations.sort(key=lambda mr: mr[1], reverse=True)
 
     ''' Just to make sure things don't break if there are no recommendations
         for this user.
     '''
     if len(unseen_movie_recommendations):
+        ''' the first item of unseen_movie_recommendations is the
+            (movid_id, rating) tuple of the highest rated movie. We only want
+            the movie_id which is why you see the list access of [0][0] here
+        '''
         recommendation = str(unseen_movie_recommendations[0][0])
     else:
+        # there are no recommendations for this user
         recommendation = '[NO RECOMMENDATION]'
 
     ''' Finally we print out the recommendation for this user, and add some
