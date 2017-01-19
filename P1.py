@@ -86,6 +86,8 @@ INPUT_RE_STR = (
 )
 INPUT_RE = re.compile(INPUT_RE_STR)
 
+def similarity(u, v):
+    pass
 
 # any float type is acceptable here, I am using 64 bit because I am running
 # this on a 64 bit machine.
