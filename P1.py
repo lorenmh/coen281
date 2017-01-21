@@ -12,6 +12,8 @@ from itertools import combinations
 
 from scipy.sparse import (csc_matrix, csr_matrix, coo_matrix, dok_matrix)
 
+np.set_printoptions(precision=3)
+
 INPUT_RE_STR = r'^(?:\s*#.*)|(?:\s*(?P<user_id>\d+)\s*,\s*(?P<movie_id>\d+)' \
     '\s*,\s*(?P<rating>\d+(?:\.\d+)?)\s*(?:#.*)?)$'
 INPUT_RE = re.compile(INPUT_RE_STR)
@@ -98,7 +100,6 @@ for user_ratings in ratings_arr:
         co_occurance_arr[movie_id, movie_id] += 1
 
 recommendation_arr = co_occurance_arr.dot(ratings_arr.T)
-
 unseen_recs_arr = np.where(ratings_arr == 0, recommendation_arr.T, 0)
 
 ''' enumerates each row of user recommendations to get the user id
@@ -130,7 +131,7 @@ def compute_similarity(u, v):
     v = v[non_zero_indices]
     return u.dot(v) / (np.linalg.norm(u) * np.linalg.norm(v))
 
-user_similarity_arr = np.identity(size_user_id)
+user_similarity_arr = np.zeros(shape=(size_user_id, size_user_id))
 
 user_id_pairs = combinations(unique_user_ids, 2)
 
@@ -141,3 +142,30 @@ for user_id_1, user_id_2 in user_id_pairs:
     )
     user_similarity_arr[user_id_1, user_id_2] = similarity
     user_similarity_arr[user_id_2, user_id_1] = similarity
+
+weighted = ratings_arr.T.dot(user_similarity_arr).T
+counts_with_self = np.tile(co_occurance_arr.diagonal(), (size_user_id, 1))
+rated_mask = (ratings_arr > 0).astype(int)
+counts = counts_with_self - rated_mask
+recommendations = np.divide(weighted, counts)
+
+recommendations[np.isnan(recommendations)] = 0
+recommendations[rated_mask == 1] = 0
+
+print()
+
+print('='*80)
+print('USER-SIMILARITY RECOMMENDATIONS')
+print('='*80)
+for id, user_recommendations in enumerate(recommendations):
+    if not user_recommendations.any():
+        continue
+    recs_with_movie_id = enumerate(user_recommendations)
+    filtered_recs = filter(lambda i: i[1] != 0, recs_with_movie_id)
+    sorted_recs = sorted(filtered_recs, key=lambda i: i[1], reverse=1)
+    if len(sorted_recs):
+        print('user', id, sorted_recs, '=> recommend', sorted_recs[0][0])
+    else:
+        print('user', id, '=> no recommendation')
+print('='*80, '\n', '='*80, sep='')
+
