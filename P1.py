@@ -124,7 +124,7 @@ for id, user_recommendations in enumerate(unseen_recs_arr):
 print('='*80, '\n', '='*80, sep='')
 
 def compute_similarity(u, v):
-    non_zero_indices = np.intersect1d(np.nonzero(u), np.nonzero(u))
+    non_zero_indices = np.logical_and(u>0, v>0)
     if not len(non_zero_indices):
         return -1
     u = u[non_zero_indices]
