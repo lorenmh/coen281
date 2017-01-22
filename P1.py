@@ -1,5 +1,9 @@
 #!/opt/python-3.4/linux/bin/python3
 
+'''
+LAUREN HOWARD - COEN 281 - P1 1/22/2017
+'''
+
 import re
 import sys
 import warnings
@@ -28,11 +32,6 @@ class InputError(Exception):
 
 
 def parsed_input_generator(input_lines):
-    ''' parse_input_line will attempt to parse the user_id, movie_id, and
-        rating from an input line. If there is an error with the input an
-        InputError will be raised
-    '''
-
     for input_line in input_lines:
         match = INPUT_RE.match(input_line)
 
@@ -61,11 +60,10 @@ def parsed_input_generator(input_lines):
 
 try:
     # for every input line, parse the line and put the values into ratings
-    f = open('sample_input.csv', 'r')
-    ratings_input = list(parsed_input_generator(f))
-    f.close()
-
-    # ratings_input = list(parsed_input_generator(sys.stdin))
+    #f = open('sample_input.csv', 'r')
+    #ratings_input = list(parsed_input_generator(f))
+    #f.close()
+    ratings_input = list(parsed_input_generator(sys.stdin))
 except InputError as e:
     # there was an InputError so record the error and exit
     print('Error with input:', e.message, file=sys.stderr)
@@ -102,34 +100,32 @@ for user_ratings in ratings_arr:
 recommendation_arr = co_occurance_arr.dot(ratings_arr.T)
 unseen_recs_arr = np.where(ratings_arr == 0, recommendation_arr.T, 0)
 
-''' enumerates each row of user recommendations to get the user id
-Then the user recommendations are enumerated so that each recommendation value
-contains the movie_id as well (the index is the movie id). Then recommendations
-with zero values are filtered out. Then the recommendations are sorted by the
-recommendation value. Then we print
-'''
+rated_mask = (ratings_arr > 0).astype(int)
+
 print('='*80)
 print('CO-OCCURANCE RECOMMENDATIONS')
 print('='*80)
 for id, user_recommendations in enumerate(unseen_recs_arr):
-    if not user_recommendations.any():
+    if not rated_mask[id].any():
         continue
     recs_with_movie_id = enumerate(user_recommendations)
     filtered_recs = filter(lambda i: i[1] != 0, recs_with_movie_id)
     sorted_recs = sorted(filtered_recs, key=lambda i: i[1], reverse=1)
     if len(sorted_recs):
-        print('user', id, sorted_recs, '=> recommend', sorted_recs[0][0])
+        print('user %d:' % id, sorted_recs, '=> recommend', sorted_recs[0][0])
     else:
-        print('user', id, '=> no recommendation')
+        print('user %d:' % id, '=> no recommendation')
 print('='*80, '\n', '='*80, sep='')
 
+
 def compute_similarity(u, v):
-    non_zero_indices = np.logical_and(u>0, v>0)
+    non_zero_indices = np.logical_and(u > 0, v > 0)
     if not len(non_zero_indices):
         return -1
     u = u[non_zero_indices]
     v = v[non_zero_indices]
     return u.dot(v) / (np.linalg.norm(u) * np.linalg.norm(v))
+
 
 user_similarity_arr = np.zeros(shape=(size_user_id, size_user_id))
 
@@ -145,7 +141,6 @@ for user_id_1, user_id_2 in user_id_pairs:
 
 weighted = ratings_arr.T.dot(user_similarity_arr).T
 counts_with_self = np.tile(co_occurance_arr.diagonal(), (size_user_id, 1))
-rated_mask = (ratings_arr > 0).astype(int)
 counts = counts_with_self - rated_mask
 recommendations = np.divide(weighted, counts)
 
@@ -154,18 +149,28 @@ recommendations[rated_mask == 1] = 0
 
 print()
 
+
+def pretty_tuple(t):
+    return '(%d, %.2f)' % (t[0], t[1])
+
+
+def pretty(i):
+    return '[%s]' % ', '.join([pretty_tuple(t) for t in i])
+
+
+
 print('='*80)
 print('USER-SIMILARITY RECOMMENDATIONS')
 print('='*80)
 for id, user_recommendations in enumerate(recommendations):
-    if not user_recommendations.any():
+    if not rated_mask[id].any():
         continue
     recs_with_movie_id = enumerate(user_recommendations)
     filtered_recs = filter(lambda i: i[1] != 0, recs_with_movie_id)
     sorted_recs = sorted(filtered_recs, key=lambda i: i[1], reverse=1)
+    sorted_str = pretty(sorted_recs)
     if len(sorted_recs):
-        print('user', id, sorted_recs, '=> recommend', sorted_recs[0][0])
+        print('user %d:' % id, sorted_str, '=> recommend', sorted_recs[0][0])
     else:
-        print('user', id, '=> no recommendation')
+        print('user %d:' % id, '=> no recommendation')
 print('='*80, '\n', '='*80, sep='')
-
