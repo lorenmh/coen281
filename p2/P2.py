@@ -73,7 +73,7 @@ def gna(root_node_id, graph):
     I can walk from the deepest leaves and move up'''
 
     parent_nodes = {root_node_id: [None]}
-    leaf_nodes = []
+    tree = {}
     levels = []
 
     already_visited = set([])
@@ -84,13 +84,19 @@ def gna(root_node_id, graph):
         for parent_node_id in current_level:
             connected_nodes = graph[parent_node_id]
 
-            if not len(set(connected_nodes) - already_visited - current_level):
-                leaf_nodes.append(parent_node_id)
+            children = (
+                set(connected_nodes) - already_visited - current_level
+            )
+
+            tree[parent_node_id] = children
+
+            if not len(children):
                 continue
 
-            for child_node_id in connected_nodes:
-                if child_node_id in (already_visited | current_level):
-                    continue
+            # for child_node_id in connected_nodes:
+            #     if child_node_id in (already_visited | current_level):
+            #         continue
+            for child_node_id in children:
 
                 parents = parent_nodes.get(child_node_id, [])
                 parents.append(parent_node_id)
@@ -109,7 +115,7 @@ def gna(root_node_id, graph):
 
     parent_lens = {k: len(v) for k, v in parent_nodes.items()}
 
-    return parent_nodes, parent_lens, leaf_nodes, levels
+    return parent_nodes, parent_lens, levels, tree
 
 
 node_ids = set([i for sublist in graph_input for i in sublist])
