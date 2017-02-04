@@ -41,10 +41,10 @@ def parsed_input_generator(input_lines):
 
 try:
     # parse the input
-    f = open('sample_input.csv', 'r')
-    graph_input = list(parsed_input_generator(f))
-    f.close()
-    #ratings_input = list(parsed_input_generator(sys.stdin))
+    # f = open('sample_input.csv', 'r')
+    # graph_input = list(parsed_input_generator(f))
+    # f.close()
+    graph_input = list(parsed_input_generator(sys.stdin))
 except InputError as e:
     print('Error with input:', e.message, file=sys.stderr)
     sys.exit(1)
